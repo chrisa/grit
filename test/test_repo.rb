@@ -61,7 +61,7 @@ class TestRepo < Test::Unit::TestCase
 
   def test_refs_should_return_array_of_ref_objects
     @r.refs.each do |ref|
-      assert ref.is_a? Grit::Ref
+      assert ref.is_a?(Grit::Ref)
     end
   end
 
@@ -317,5 +317,31 @@ class TestRepo < Test::Unit::TestCase
   def test_log_with_path_and_options
     Git.any_instance.expects(:log).with({:pretty => 'raw', :max_count => 1}, 'master', '--', 'file.rb').returns(fixture('rev_list'))
     @r.log('master', 'file.rb', :max_count => 1)
+  end
+  
+  # commit_deltas_from
+  
+  def test_commit_deltas_from_nothing_new
+    other_repo = Repo.new(GRIT_REPO)
+    @r.git.expects(:rev_list).with({}, "master").returns(fixture("rev_list_delta_b"))
+    other_repo.git.expects(:rev_list).with({}, "master").returns(fixture("rev_list_delta_a"))
+    
+    delta_blobs = @r.commit_deltas_from(other_repo)
+    assert_equal 0, delta_blobs.size
+  end
+  
+  def test_commit_deltas_from_when_other_has_new
+    other_repo = Repo.new(GRIT_REPO)
+    @r.git.expects(:rev_list).with({}, "master").returns(fixture("rev_list_delta_a"))
+    other_repo.git.expects(:rev_list).with({}, "master").returns(fixture("rev_list_delta_b"))
+    %w[
+      4c8124ffcf4039d292442eeccabdeca5af5c5017
+      634396b2f541a9f2d58b00be1a07f0c358b999b3
+      ab25fd8483882c3bda8a458ad2965d2248654335
+    ].each do |ref|
+      Commit.expects(:find_all).with(other_repo, ref, :max_count => 1).returns([stub()])
+    end
+    delta_blobs = @r.commit_deltas_from(other_repo)
+    assert_equal 3, delta_blobs.size
   end
 end

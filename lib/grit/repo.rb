@@ -209,6 +209,20 @@ module Grit
       Commit.find_all(self, id, options).first
     end
     
+    # Returns a list of commits that is in +other_repo+ but not in self
+    #
+    # Returns Grit::Commit[]
+    def commit_deltas_from(other_repo, ref = "master", other_ref = "master")
+      # TODO: we should be able to figure out the branch point, rather than
+      # rev-list'ing the whole thing
+      repo_refs       = self.git.rev_list({}, ref).strip.split("\n")
+      other_repo_refs = other_repo.git.rev_list({}, other_ref).strip.split("\n")
+      
+      (other_repo_refs - repo_refs).map do |ref|
+        Commit.find_all(other_repo, ref, {:max_count => 1}).first
+      end
+    end
+    
     # The Tree object for the given treeish reference
     #   +treeish+ is the reference (default 'master')
     #   +paths+ is an optional Array of directory paths to restrict the tree (deafult [])
@@ -324,11 +338,19 @@ module Grit
       self.git.archive(options, treeish, "| gzip")
     end
 
-    # run archive directly to a file
-    def archive_to_file(treeish = 'master', prefix = nil, filename = 'archive.tar.gz')
+    # Write an archive directly to a file
+    #   +treeish+ is the treeish name/id (default 'master')
+    #   +prefix+ is the optional prefix (default nil)
+    #   +filename+ is the name of the file (default 'archive.tar.gz')
+    #   +format+ is the optional format (default nil)
+    #   +pipe+ is the command to run the output through (default 'gzip')
+    #
+    # Returns nothing
+    def archive_to_file(treeish = 'master', prefix = nil, filename = 'archive.tar.gz', format = nil, pipe = "gzip")
       options = {}
       options[:prefix] = prefix if prefix
-      self.git.archive(options, treeish, "| gzip > #{filename}")
+      options[:format] = format if format
+      self.git.archive(options, treeish, "| #{pipe} > #{filename}")
     end
 
     # Enable git-daemon serving of this repository by writing the
